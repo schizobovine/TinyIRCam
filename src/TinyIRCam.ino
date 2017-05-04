@@ -12,7 +12,7 @@
 #include <SPI.h>
 #include <Wire.h>
 #include <TinyScreen.h>
-#include "GridEye.h"
+#include <GridEye.h>
 
 #define GRID_SIZE (8*8)
 #define GRID_HEIGHT (8)
@@ -23,6 +23,8 @@
 
 TinyScreen display = TinyScreen(TinyScreenPlus);
 GridEye cam = GridEye();
+
+int cells[GRID_SIZE];
 
 typedef struct {
   uint8_t red;
@@ -98,6 +100,10 @@ void drawCell(int w, int h, color_t *color) {
 
 void setup() {
 
+  for (i=0; i<GRID_SIZE; i++) {
+    cells[i] = 0;
+  }
+
   // Setup serial for debugging
   SerialUSB.begin(115200);
   SerialUSB.println("HAI");
@@ -113,25 +119,41 @@ void setup() {
   Wire.setClock(400000);
 
   // Fire up IR sensor
-  if (!cam.begin()) {
-    while (1) {
-      SerialUSB.println(F("failed to find camera!"));
-      delay(1000);
-    }
-  }
+  int tt = cam.thermistorTemp();
+  SerialUSB.print(F("thermistor temp = "));
+  SerialUSB.println(tt);
+
+  //if (!cam.begin()) {
+  //  while (1) {
+  //    SerialUSB.println(F("failed to find camera!"));
+  //    delay(1000);
+  //  }
+  //}
 
 }
 
 void loop() {
 
   // Fetch fresh data
-  size_t bytes = cam.poll();
-  SerialUSB.print(F("TWI_BUFFER_LENGTH = "));
-  SerialUSB.println(BUFFER_LENGTH, DEC);
-  SerialUSB.print(F("bytes read = "));
-  SerialUSB.println(bytes, DEC);
+  cam.pixelOut(&cells[0]);
+
+  for (i=0; i<GRID_SIZE; i++) {
+    SerialUSB.print(cells[i] * 0.25, 4);
+    if (i % GRID_WIDTH == GRID_WIDTH - 1) {
+      SerialUSB.println();
+    } else {
+      SerialUSB.print(F(" "));
+    }
+  }
+  SerialUSB.println(F("\n--------------------\n"));
+
+  //SerialUSB.print(F("TWI_BUFFER_LENGTH = "));
+  //SerialUSB.println(BUFFER_LENGTH, DEC);
+  //SerialUSB.print(F("bytes read = "));
+  //SerialUSB.println(bytes, DEC);
 
   // Fill in display with colors based on data read
+  /*
   for (h=0; h<GRID_HEIGHT; h++) {
     for (w=0; w<GRID_WIDTH; w++) {
       SerialUSB.print(cam.cellRaw(w, h, false), HEX);
@@ -158,6 +180,7 @@ void loop() {
     SerialUSB.println();
   }
   SerialUSB.println();
+  */
 
   delay(1000);
 

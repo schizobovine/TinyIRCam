@@ -14,7 +14,7 @@
 #include <TinyScreen.h>
 #include <GridEye.h>
 
-#define DEBUG 1
+#define DEBUG 0
 
 #if DEBUG
 #define DPRINT(...) SerialUSB.print(__VA_ARGS__)
@@ -48,6 +48,9 @@ typedef struct {
 typedef struct {
   int minval;
   color_t color;
+  uint8_t fg;
+  uint8_t bg;
+  char label[3];
 } heatmap_t;
 
 // Heatmap is a gradient between these color points. Uses 16 bit color, so only
@@ -55,15 +58,15 @@ typedef struct {
 // chopped off.
 const int HEATMAP_SIZE = 8;
 const heatmap_t HEATMAP[HEATMAP_SIZE] = {
-  //{ temp<,  {    R,    G,    B } }
-    { -125*4, { 0x00, 0x00, 0x00 } } // black
-  , {    0*4, { 0x00, 0x00, 0x3F } } // blue
-  , {   10*4, { 0x00, 0x3F, 0x3F } } // cyan
-  , {   25*4, { 0x00, 0x3F, 0x00 } } // green
-  , {   30*4, { 0x3F, 0x3F, 0x00 } } // yellow
-  , {   35*4, { 0x3F, 0x00, 0x00 } } // red
-  , {   50*4, { 0x00, 0x00, 0x3F } } // purple
-  , {  125*4, { 0x3F, 0x3F, 0x3F } } // white
+  //{ temp<,  {    R,    G,    B }   fg,   bg }
+    { -125*4, { 0x00, 0x00, 0x00 }, 0xFF, 0x00, "<0" }
+  , {    0*4, { 0x00, 0x00, 0x3F }, 0xFF, 0xE0, " 0" }
+  , {   10*4, { 0x00, 0x3F, 0x3F }, 0xFF, 0xFC, "10" }
+  , {   25*4, { 0x00, 0x3F, 0x00 }, 0xFF, 0x1C, "25" }
+  , {   30*4, { 0x3F, 0x3F, 0x00 }, 0xFF, 0x1F, "30" }
+  , {   35*4, { 0x3F, 0x00, 0x00 }, 0xFF, 0x03, "35" }
+  , {   50*4, { 0x3F, 0x00, 0x3F }, 0x00, 0xE3, "50" }
+  , {   99*4, { 0x3F, 0x3F, 0x3F }, 0x00, 0xFF, "99" }
 };
 
 // Convert floaing point temperature to a RGB color value
@@ -123,10 +126,10 @@ void drawCell(int _w, int _h, float value, color_t *color) {
   );
 
   // Write some text
-  if (_w == 0 || _h == 0 || _w == GRID_WIDTH || _h == GRID_HEIGHT) {
-    display.setCursor(x_zero, y_zero);
-    display.print(value, 0);
-  }
+  //if (_w == 0 || _h == 0 || _w == GRID_WIDTH || _h == GRID_HEIGHT) {
+  //  display.setCursor(x_zero, y_zero);
+  //  display.print(value, 0);
+  //}
 
 }
 
@@ -134,6 +137,14 @@ void drawCell(int _w, int _h, float value, color_t *color) {
 void displayTest() {
   int w, h;
   color_t color;
+
+  //display.setCursor(0, 0);
+  //display.fontColor(HEATMAP[0].fg, HEATMAP[0].bg);
+  //display.print(0, DEC);
+
+  //display.setCursor(0, 8);
+  //display.fontColor(HEATMAP[1].fg, HEATMAP[1].bg);
+  //display.print(HEATMAP[1].minval, DEC);
 
   for (w=0; w<GRID_WIDTH; w++) {
     for (h=0; h<GRID_HEIGHT; h++) {
@@ -143,6 +154,17 @@ void displayTest() {
       drawCell(w, h, 0.0, &color);
     }
   }
+}
+
+// Draw legend
+void drawLegend() {
+
+  for (int i=0; i<HEATMAP_SIZE; i++) {
+    display.setCursor(0, i * 8);
+    display.fontColor(HEATMAP[i].fg, HEATMAP[i].bg);
+    display.print(HEATMAP[i].label);
+  }
+
 }
 
 void setup() {
@@ -161,7 +183,9 @@ void setup() {
   display.begin();
   display.setBrightness(10);
   display.clearScreen();
+  display.setFlip(1);
   display.setFont(thinPixel7_10ptFontInfo);
+  drawLegend();
   displayTest();
 
   // Init i2c
@@ -177,42 +201,50 @@ void setup() {
 
 void loop() {
   float t;
+  int minT = 125*4, maxT = -125*4;
   color_t c;
 
   // Fetch fresh data
   cam.pixelOut(&cells[0]);
 
   for (int i=0; i<GRID_SIZE; i++) {
+
+    // Current min/max on display
+    if (minT > cells[i]) minT = cells[i];
+    if (maxT < cells[i]) maxT = cells[i];
+
+    // Actual temp because floating point is hard
     t = cells[i] * 0.25;
+
+    // Get a color for that shit
     temp2color(cells[i], &c);
+
+    // Shart out our tile
     drawCell(PIXEL_X(i), PIXEL_Y(i), t, &c);
+
+#if DEBUG
+
+    // Shart some more debugging crap
     DPRINT(t, 2);
     if (i % GRID_WIDTH == GRID_WIDTH - 1) {
       DPRINTLN();
     } else {
       DPRINT(F(" "));
     }
+
+#endif
+
   }
 
-  //DPRINTLN(F("\n"));
+  // Show min & max
 
-  //for (int i=0; i<GRID_SIZE; i++) {
-  //  temp2color(cells[i], &c);
-  //  DPRINT(F("("));
-  //  DPRINT(c.red, HEX);
-  //  DPRINT(F(","));
-  //  DPRINT(c.green, HEX);
-  //  DPRINT(F(","));
-  //  DPRINT(c.blue, HEX);
-  //  DPRINT(F(")"));
-  //  if (i % GRID_WIDTH == GRID_WIDTH - 1) {
-  //    DPRINTLN();
-  //  } else {
-  //    DPRINT(F(" "));
-  //  }
-  //}
+  display.setCursor(80, 0);
+  display.fontColor(0xFF, 0x00);
+  display.print(minT/4, DEC);
 
-  DPRINTLN(F("\n--------------------\n"));
+  display.setCursor(80, 54);
+  display.fontColor(0x00, 0xFF);
+  display.print(maxT/4, DEC);
 
   delay(1000);
 

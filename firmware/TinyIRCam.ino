@@ -14,7 +14,7 @@
 #include <TinyScreen.h>
 #include <GridEye.h>
 
-#define DEBUG 0
+#define DEBUG 1
 
 #if DEBUG
 #define DPRINT(...) SerialUSB.print(__VA_ARGS__)
